@@ -1,82 +1,60 @@
 defmodule EV3.Motor do
-  @path_start "/sys/class/tacho-motor/motor"
+  import EV3.MotorDSL
 
-  defmodule State do
-    defstruct id: 0, port_name: :undefined, type: :tacho
-  end
-    
-  def start_link id, port_name, type do
-    ^port_name = id_port_name id
-    ^type = id_type id                                   
-    Agent.start_link(fn() -> %State{id: id, port_name: port_name, type: type} end)
-  end
+  @moduledoc """
+  Provides functions for controlling an EV3 motor of type Tacho or DC
 
-  def position motor do
-    Agent.get(motor,
-      fn s ->
-         id_path(s.id, "position") |> EV3.Util.read!
-      end)
-  end
+  ## Example
 
-  def pulses_per_second motor do
-    Agent.get(motor,
-      fn s ->
-        id_path(s.id, "pulses_per_second") |> EV3.Util.read!
-      end)
-  end
+      iex> EV3.Motors.run :outB, 100
+      :ok
+      iex> EV3.Motors.stop :outB
+      :ok
 
-  def set_duty_cycle_sp(motor, pct) do
-    Agent.get(motor,
-      fn s ->
-        id_path(s.id, "duty_cycle_sp") |> EV3.Util.write! Integer.to_string(pct)
-      end)
-  end
+  """
 
-  def duty_cycle_sp motor do
-    Agent.get(motor,
-      fn s ->
-        id_path(s.id, "duty_cycle_sp") |> EV3.Util.read!
-      end)
+  @reference_tacho "http://www.ev3dev.org/docs/drivers/tacho-motor-class/"
+  @reference_dc "http://www.ev3dev.org/docs/drivers/dc-motor-class/"
+
+  motor_property "run",                   writable: true, min: 0, max: 1
+  motor_property "duty_cycle",            writable: false
+  motor_property "duty_cycle_sp",         writable: true, min: -100, max: 100
+  motor_property "pulses_per_second",     writable: false
+  motor_property "pulses_per_second_sp",  writable: true
+  motor_property "position",              writable: true
+  # stop_mode -> :idle
+  # set_stop_mode -> :coast :brake :hold
+
+  # switch_polarity
+
+  def run(port) do
+    set_run port, 1
   end
 
-  def run motor do
-    Agent.get(motor,
-      fn s ->
-        id_path(s.id, "run") |> EV3.Util.write! "1"
-      end)
+  def run(port, speed) do
+    change_speed port, speed
+    run port
   end
 
-  def stop motor do
-    Agent.get(motor,
-      fn s ->
-        id_path(s.id, "run") |> EV3.Util.write! "0"
-      end)
-  end
-  
-
-
-
-
-  
-  # Private helper functions
-  defp id_port_name id do
-    id_path(id, "port_name") |> EV3.Util.read!  |> EV3.Util.port_name_from_string
+  def forward(port, speed \\ 100) do
+    run port, speed
   end
 
-  defp id_path id, attr do
-    @path_start <> "#{Integer.to_string id}/" <> attr
-  end
-  
-  defp id_type id do
-    id_path(id, "type") |> EV3.Util.read!  |> type_from_string
+  def backward(port, speed \\ 100) do
+    run port, -speed
   end
 
-  defp type_from_string(str), do: String.to_atom(str)
+  def change_speed(port, speed) do
+    set_duty_cycle_sp port, speed
+  end
 
-  
-  
+  def stop(port) do
+    set_run port, 0
+  end
+
+  def stop_all() do
+    EV3.Motors.get_all()
+    |> Enum.each fn {port, _path, _type} -> stop port end
+  end
+
 end
-
-
-
-  
