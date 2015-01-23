@@ -38,13 +38,20 @@ defmodule EV3 do
 
     @reference "http://www.ev3dev.org/docs/drivers/lego-sensor-class/"
 
-    def get(name) do
+    def get(name), do: get(name, false)
+    defp get(name, is_retry) do
       list = EV3.state_agent_get :sensors_state, fn infos -> infos[name] end
       case list do
         [{_port, path}] ->
           path
         nil ->
-          raise "No sensor with name #{name}"
+          case is_retry do
+            true ->
+              raise "No sensor with name #{name}"
+            false ->
+              EV3.scan_ports
+              get(name, true)
+          end
         list when length(list) > 1 ->
           raise "Several sensors detected, please get/2"
       end
@@ -79,13 +86,20 @@ defmodule EV3 do
     @reference_tacho "http://www.ev3dev.org/docs/drivers/tacho-motor-class/"
     @reference_dc "http://www.ev3dev.org/docs/drivers/dc-motor-class/"
 
-    def get(port) do
+    def get(port), do: get(port, false)
+    defp get(port, is_retry) do
       case EV3.state_agent_get :motors_state,
         fn infos -> List.keyfind infos, port, 0 end do
         {^port, _path, _type} = info  ->
           info
         nil ->
-          raise "No motor at port #{port}"
+          case is_retry do
+            true ->
+              raise "No motor at port #{port}"
+            false ->
+              EV3.scan_ports
+              get(port, true)
+          end
       end
     end
 
