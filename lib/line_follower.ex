@@ -2,8 +2,9 @@ defmodule LineFollower do
 
   @left_motor :outB
   @right_motor :outC
+  @tail_motor :outD
 
-  @forward_speed 50
+  @forward_speed 25
   @slight_turn_factor 0.8
 
   @full_turn_speed 25
@@ -20,8 +21,11 @@ defmodule LineFollower do
   """
   def start color \\ :white do
       EV3.ColorSensor.set_mode :col_color
+      EV3.Motor.set_regulation_mode @left_motor, :on
+      EV3.Motor.set_regulation_mode @right_motor, :on
       pid = spawn fn -> controller color end
       Process.register pid, :line_follower_pid
+      spawn fn -> bumper_process end
   end
 
   @doc """
@@ -48,6 +52,12 @@ defmodule LineFollower do
 
   def find_line color do
     forward
+    stop_at_color color
+    backward 25
+    stop_at_other_color color
+    EV3.Motor.set_stop_mode @left_motor, :brake
+    EV3.Motor.set_stop_mode @right_motor, :brake
+    forward 10
     stop_at_color color
     straighten_up color
   end
@@ -135,6 +145,11 @@ defmodule LineFollower do
     EV3.Motor.forward @right_motor, speed
   end
 
+  def backward speed do
+    EV3.Motor.backward @left_motor, speed
+    EV3.Motor.backward @right_motor, speed
+  end
+
   def forward_slight_right do
     EV3.Motor.forward @left_motor, @forward_speed
     EV3.Motor.forward @right_motor, round @forward_speed * @slight_turn_factor
@@ -151,11 +166,32 @@ defmodule LineFollower do
   end
 
   def turn_left do
+    EV3.Motor.backward @left_motor, @full_turn_speed
     EV3.Motor.forward @right_motor, @full_turn_speed
   end
 
   def turn_right do
     EV3.Motor.forward @left_motor, @full_turn_speed
+    EV3.Motor.backward @right_motor, @full_turn_speed
+  end
+
+  #
+  # Bumper process which stops the motors if it hits anything
+  #
+
+  def bumper_process do
+    :timer.sleep 100
+    case EV3.TouchSensor.value do
+      :released ->
+        bumper_process
+      :pressed ->
+        stop
+    end
+  end
+
+  def wag_tail do
+    EV3.Motor.run @tail_motor, 100
+    spawn fn -> :timer.sleep 5000; EV3.Motor.stop @tail_motor end
   end
 
 end
