@@ -1,4 +1,5 @@
 defmodule EV3.TouchSensor do
+  import EV3.Sensor.DSL
 
   @device_name "lego-ev3-touch"
 
@@ -14,21 +15,28 @@ defmodule EV3.TouchSensor do
 
   @reference "http://www.ev3dev.org/docs/sensors/lego-ev3-touch-sensor/"
 
-  @values %{"0" => :released,
-            "1" => :pressed}
+  def_sensor_modes [[string: "TOUCH", atom: :touch, num_values: 1]]
 
-  def value() do
-    EV3.Sensors.get(@device_name)
-    |> Path.join("value0")
-    |> EV3.Util.read!
-    |> value_from_string
+  @values %{0 => :released,
+            1 => :pressed}
+
+  def value(port \\ :any) do
+    get_value0(port) |> value_from_integer
+  end
+
+  def is_released?(port \\ :any) do
+    value(port) == :released
+  end
+
+  def is_pressed?(port \\ :any) do
+    value(port) == :pressed
   end
 
   #
   # Helper functions
   #
 
-  defp value_from_string(s) do
+  defp value_from_integer(s) do
     @values[s]
   end
 

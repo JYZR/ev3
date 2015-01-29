@@ -1,4 +1,5 @@
 defmodule EV3.ColorSensor do
+  import EV3.Sensor.DSL
 
   @device_name "ev3-uart-29"
 
@@ -16,7 +17,7 @@ defmodule EV3.ColorSensor do
 
   @reference "http://www.ev3dev.org/docs/sensors/lego-ev3-color-sensor/"
 
-  # Mode            Description
+  # Mode          Description
   # ------------- --------------------------------------------------------------
   # :col_reflect  Reflected light intensity (0 to 100)
   # :col_ambient  Ambient light intensity (0 to 100)
@@ -24,60 +25,46 @@ defmodule EV3.ColorSensor do
   # :ref_raw      Reflected light, raw values {integer, integer}
   # :rgb_raw      Raw color {red::0..255, green::0..255, blue::0..255}
 
-  @modes [{"COL-REFLECT", :col_reflect},
-          {"COL-AMBIENT", :col_ambient},
-          {"COL-COLOR",   :col_color},
-          {"REF-RAW",     :ref_raw},
-          {"RGB-RAW",     :rgb_raw}]
+  # The macro `def_sensor_modes` defines the basic functions which are needed to
+  # get values out from a sensor, have a look in sensor_dsl.ex to find out more.
+
+  def_sensor_modes [[string: "COL-REFLECT", atom: :col_reflect, num_values: 1],
+                    [string: "COL-AMBIENT", atom: :col_ambient, num_values: 1],
+                    [string: "COL-COLOR",   atom: :col_color,   num_values: 1],
+                    [string: "REF-RAW",     atom: :ref_raw,     num_values: 2],
+                    [string: "RGB-RAW",     atom: :rgb_raw,     num_values: 3]]
 
   # Values for mode :col_color
-  @colors %{"0" => :nothing,
-            "1" => :black,
-            "2" => :blue,
-            "3" => :green,
-            "4" => :yellow,
-            "5" => :red,
-            "6" => :white,
-            "7" => :brown}
+  @colors %{0 => :nothing,
+            1 => :black,
+            2 => :blue,
+            3 => :green,
+            4 => :yellow,
+            5 => :red,
+            6 => :white,
+            7 => :brown}
 
-  def mode() do
-    EV3.Sensors.get(@device_name)
-      |> Path.join("mode")
-      |> EV3.Util.read!
-      |> mode_from_string
+  def get_reflect(port \\ :any) do
+    set_mode(port, :col_reflect)
+    get_values(port)
   end
 
-  def set_mode(mode) do
-    EV3.Sensors.get(@device_name)
-      |> Path.join("mode")
-      |> EV3.Util.write! mode_to_string(mode)
+  def get_ambient(port \\ :any) do
+    set_mode(port, :col_ambient)
+    get_values(port)
   end
 
-  def value() do
-    case mode() do
-      :col_color ->
-        EV3.Sensors.get(@device_name)
-          |> Path.join("value0")
-          |> EV3.Util.read!
-          |> color_from_string
-    end
+  def get_color(port \\ :any) do
+    set_mode(port, :col_color)
+    get_values(port) |> color_from_integer
   end
 
   #
   # Helper functions
   #
 
-  defp mode_from_string(s) do
-    List.keyfind(@modes, s, 0) |> elem 1
-  end
-
-  defp mode_to_string(m) do
-    List.keyfind(@modes, m, 1) |> elem 0
-  end
-
-  defp color_from_string(s) do
+  defp color_from_integer(s) do
     @colors[s]
   end
-
 
 end
