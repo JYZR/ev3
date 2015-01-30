@@ -61,7 +61,7 @@ defmodule EV3.Sensor.DSL do
     # Create port check here since it will be used in both set and get funs
     port_check = quote do
       if not Enum.member?([:any | unquote(@ports)], port) do
-        raise "Invalid port"
+        raise "Invalid port #{port}"
       end
     end
 
@@ -84,6 +84,15 @@ defmodule EV3.Sensor.DSL do
       # set_mode/{1,2}
       #
 
+      @doc """
+      Set the mode of a sensor.
+
+      `port` is optional and should‚ if specified, be either of `:in1`, `:in2`,
+      `:in3` or `:in4`.
+
+      See module documentation for which modes that are available.
+
+      """
       def set_mode(port \\ :any, mode) do
         if not Enum.member?(unquote(mode_atoms), mode) do
           raise("Invalid mode")
@@ -98,6 +107,15 @@ defmodule EV3.Sensor.DSL do
       # get_mode/{0,1}
       #
 
+      @doc """
+      Get the mode of a sensor.
+
+      `port` is optional and should‚ if specified, be either of `:in1`, `:in2`,
+      `:in3` or `:in4`.
+
+      See module documentation for which modes that may be returned.
+
+      """
       def get_mode(port \\ :any) do
         unquote(port_check)
         EV3.Sensors.get(@device_name, port)
