@@ -1,5 +1,6 @@
 defmodule EV3.ColorSensor do
   import EV3.Sensor.DSL
+  import EV3.Util
 
   @device_name "ev3-uart-29"
 
@@ -44,19 +45,37 @@ defmodule EV3.ColorSensor do
             6 => :white,
             7 => :brown}
 
-  def get_reflect(port \\ :any) do
-    set_mode(port, :col_reflect)
+  def_as_opts get_reflect(port \\ :any, set_mode \\ true) do
+    if set_mode == true do
+      set_mode(port, :col_reflect)
+    end
     get_values(port)
   end
 
-  def get_ambient(port \\ :any) do
-    set_mode(port, :col_ambient)
+  def get_reflect(port, set_mode) do
+    get_reflect(port: port, set_mode: set_mode)
+  end
+
+  def_as_opts get_ambient(port \\ :any, set_mode \\ true) do
+    if set_mode == true do
+      set_mode(port, :col_ambient)
+    end
     get_values(port)
   end
 
-  def get_color(port \\ :any) do
-    set_mode(port, :col_color)
+  def get_ambient(port, set_mode) do
+    get_ambient(port: port, set_mode: set_mode)
+  end
+
+  def_as_opts get_color(port \\ :any, set_mode \\ true) do
+    if set_mode == true do
+      set_mode(port, :col_color)
+    end
     get_values(port) |> color_from_integer
+  end
+
+  def get_color(port, set_mode) do
+    get_color(port: port, set_mode: set_mode)
   end
 
   #

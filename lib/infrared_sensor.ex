@@ -1,5 +1,6 @@
 defmodule EV3.InfraredSensor do
   import EV3.Sensor.DSL
+  import EV3.Util
 
   @device_name "ev3-uart-33"
 
@@ -132,18 +133,14 @@ defmodule EV3.InfraredSensor do
   * `:set_mode` - Whether to write mode before reading values, default to `true`
 
   """
-  @proximity_defaults [port: :any, set_mode: true]
 
   @spec proximity(Keyword.t) :: 0..100
 
-  def proximity(opts \\ @proximity_defaults) when is_list(opts) do
-    options = Keyword.merge(@proximity_defaults, opts)
-
-    if options[:set_mode] == true do
-      set_mode(options[:port], :proximity)
+  def_as_opts proximity(port \\ :any, set_mode \\ true) do
+    if set_mode == true do
+      set_mode(port, :proximity)
     end
-
-    get_value0(options[:port])
+    get_value0(port)
   end
 
   def proximity(port, set_mode) do
@@ -174,20 +171,17 @@ defmodule EV3.InfraredSensor do
   * `:set_mode` - Whether to write mode before reading values, default to `true`
 
   """
-  @seek_defaults [port: :any, channel: 1, set_mode: true]
 
   @spec seek(Keyword.t)
         :: %{heading: -25..25, distance: 0..100} | :out_of_range
 
-  def seek(opts \\ @seek_defaults) when is_list(opts) do
-    options = Keyword.merge(@seek_defaults, opts)
-    channel = options[:channel]; port = options[:port]
+  def_as_opts seek(port \\ :any, channel \\ 1, set_mode \\ true) do
 
     unless channel >= 1 and channel <= 4 do
       raise("Invalid channel, should be 1, 2, 3 or 4")
     end
 
-    if options[:set_mode] == true do
+    if set_mode == true do
       set_mode(port, :seek)
     end
 
@@ -237,19 +231,16 @@ defmodule EV3.InfraredSensor do
   * `:set_mode` - Whether to write mode before reading values, default to `true`
 
   """
-  @simple_defaults [port: :any, channel: 1, set_mode: true]
 
   @spec remote_simple(Keyword.t) :: values_remote_simple_type
 
-  def remote_simple(opts \\ @simple_defaults) when is_list(opts) do
-    options = Keyword.merge(@simple_defaults, opts)
-    channel = options[:channel]; port = options[:port];
+  def_as_opts remote_simple(port \\ :any, channel \\ 1, set_mode \\ true) do
 
     unless channel >= 1 and channel <= 4 do
       raise("Invalid channel, should be 1, 2, 3 or 4")
     end
 
-    if options[:set_mode] do
+    if set_mode do
       set_mode(port, :remote_simple)
     end
 
@@ -284,23 +275,17 @@ defmodule EV3.InfraredSensor do
   * `:set_mode` - Whether to write mode before reading values, default to `true`
 
   """
-  @adv_defaults [port: :any, set_mode: true]
 
   @spec remote_adv(Keyword.t)
         :: %{keys_remote_adv_type => boolean} | :none | :beacon_mode_on
 
-  def remote_adv(opts \\ @adv_defaults) when is_list(opts) do
-    options = Keyword.merge(@adv_defaults, opts)
+  def_as_opts remote_adv(port \\ :any, set_mode \\ true) do
 
-    unless options[:channel] == nil do
-      raise("Only channel 1 can be used")
+    if set_mode == true do
+      set_mode(port, :remote_adv)
     end
 
-    if options[:set_mode] == true do
-      set_mode(options[:port], :remote_adv)
-    end
-
-    case get_value0(options[:port]) do
+    case get_value0(port) do
       384 -> :none
       262 -> :beacon_mode_on
       int ->
