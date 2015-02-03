@@ -75,3 +75,9 @@ defmodule EV3.Util do
   end
 
 end
+
+defimpl String.Chars, for: Tuple do
+  def to_string(tuple) when is_tuple(tuple) do
+    "{" <> (Tuple.to_list(tuple) |> Enum.join ", ") <> "}"
+  end
+end
