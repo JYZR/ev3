@@ -1,197 +1,242 @@
-defmodule LineFollower do
+defmodule EE.LineFollower do
+  use EV3.Util.GenFSM
+  alias EV3.Util.GenFSM
+  alias EE.BumperEvents
+  alias EE.ColorEvents
+  require Logger
 
   @left_motor :outB
   @right_motor :outC
   @tail_motor :outD
 
-  @forward_speed 25
-  @slight_turn_factor 0.8
+  @forward_speed 50
+  @slight_turn_factor 0.5
 
   @full_turn_speed 25
 
-  # The default number of times a color needs to be observed before we are
-  # certain of the color
-  @color_observation_threshold 3
+  # Time in ms before the robot would say it is lost
+  @lost_timeout 5000
 
-  # The time in ms between each color observation
-  @color_observation_interval 10
+  @lf_name :lf_p
+  @bumper_name :bumper_p
+  @color_name :color_p
 
-  @doc """
-  Start the LineFollower by spawning a controller
-  """
-  def start color \\ :white do
-      EV3.ColorSensor.set_mode :col_color
-      EV3.Motor.set_regulation_mode @left_motor, :on
-      EV3.Motor.set_regulation_mode @right_motor, :on
-      pid = spawn fn -> controller color end
-      Process.register pid, :line_follower_pid
-      spawn fn -> bumper_process end
+  defmodule State do
+    defstruct target_c: nil
   end
 
-  @doc """
-  Stop the LineFollower by killing the controller and stopping the motors
-  """
-  def stop do
-    case Process.whereis(:line_follower_pid) do
+  #
+  # User API
+  #
+
+  @defaults [color: :white,
+             forward_speed: 50,
+             slight_turn_factor: 0.5,
+             full_turn_speed: 25,
+             lost_timeout: 5000]
+
+  def start(opts \\ @defaults) do
+    parameters = Keyword.merge(@defaults, opts)
+    GenFSM.start_link(__MODULE__, parameters, [name: @lf_name])
+  end
+
+  def stop() do
+    case Process.whereis(@lf_name) do
       nil -> :ok
-      pid ->
-        Process.exit pid, :shutdown
-        Process.unregister :line_follower_pid
+      _pid ->
+        stop_lf()
     end
-    LineFollower.stop_motors
+    stop_motors()
+  end
+
+  def stop_lf() do
+    GenFSM.send_all_state_event(@lf_name, :stop)
+  end
+
+  #
+  # API for Event Generators
+  #
+
+  def notify(fsm_ref, event) do
+    case Enum.member?([:bumper_hit], event) do
+      true ->
+        GenFSM.send_all_state_event(fsm_ref, event)
+      false ->
+        GenFSM.send_event(fsm_ref, event)
+    end
+  end
+
+  #
+  # GenFSM callbacks
+  #
+
+  def init(args) do
+    EV3.Motor.reset(:all)
+    Logger.info("Motors have been reset")
+    BumperEvents.start_link(name: @bumper_name)
+    Logger.info("Started bumper events generator")
+    ColorEvents.start_link(name: @color_name)
+    Logger.info("Started color events generator")
+    forward()
+    {:ok, :find_line_forward_fast, %State{target_c: args[:color]}}
+  end
+
+  def handle_event(event, state_name, state_data) do
+    Logger.info("Received all states event '#{event}' when in state '#{state_name}'")
+    case event do
+      :bumper_stop ->
+        stop_motors_and_event_generators()
+        {:stop, :normal, state_data}
+      :stop ->
+        stop_motors_and_event_generators()
+        {:stop, :normal, state_data}
+    end
   end
 
   #
   # States
   #
 
-  def controller color do
-    find_line color
-    follow_line color
-  end
-
-  def find_line color do
-    forward
-    stop_at_color color
-    backward 25
-    stop_at_other_color color
-    EV3.Motor.set_stop_mode @left_motor, :brake
-    EV3.Motor.set_stop_mode @right_motor, :brake
-    forward 10
-    stop_at_color color
-    straighten_up color
-  end
-
-  @doc """
-  This will line up the robot with the left edge of the line
-  where the color sensor is just to the left of the line
-  """
-  def straighten_up color do
-    turn_left
-    stop_at_other_color color
-  end
-
-  def follow_line color do
-    # We should now be on the left side of the left edge, i.e. outside the line
-    forward_slight_right
-    observe_until_color color
-    # We should now be on the right side of the left edge, i.e. on the line
-    forward_slight_left
-    observe_until_other_color color
-    # On the left side again...
-    follow_line color
-  end
-
-  #
-  # Helper states
-  #
-
-  def stop_at_color color do
-    observe_until_color color
-    stop_motors
-  end
-
-  def stop_at_other_color color do
-    observe_until_other_color color
-    stop_motors
-  end
-
-  @doc """
-  This state will continue receiving messages with colors until the specified
-  color has been seen `n` consecutive times
-  """
-  def observe_until_color color, n \\ @color_observation_threshold do
-    observe_until_color color, n, n
-  end
-  def observe_until_color _color, 0, _n do
-    :ok
-  end
-  def observe_until_color color, count, n do
-    :timer.sleep @color_observation_interval
-    case EV3.ColorSensor.value do
-      ^color ->
-        observe_until_color color, count-1, n
+  def find_line_forward_fast(event, %State{target_c: target} = state_data) do
+    Logger.info("Received event '#{event}' when in state '#{:find_line_forward_fast}'")
+    case event do
+      {:color, ^target} ->
+        backward(25)
+        {:next_state, :find_line_backward, state_data}
       _ ->
-        observe_until_color color, n
+        {:next_state, :find_line_forward_fast, state_data}
     end
   end
 
-  @doc """
-  This state will continue receiving messages with colors until another color
-  than the specified has been seen `n` consecutive times
-  """
-  def observe_until_other_color color, n \\ @color_observation_threshold do
-    observe_until_other_color color, n, n
-  end
-  def observe_until_other_color _color, 0, _n do
-    :ok
-  end
-  def observe_until_other_color color, count, n do
-    :timer.sleep @color_observation_interval
-    case EV3.ColorSensor.value do
-      ^color ->
-        observe_until_other_color color, n
+  def find_line_backward(event, %State{target_c: target} = state_data) do
+    Logger.info("Received event '#{event}' when in state '#{:find_line_backward}'")
+    case event do
+      {:color, color} when color != target  ->
+        EV3.Motor.set_stop_mode(@left_motor, :brake)
+        EV3.Motor.set_stop_mode(@right_motor, :brake)
+        forward(10)
+        {:next_state, :find_line_foward_slow, state_data}
       _ ->
-        observe_until_other_color color, count-1, n
+        {:next_state, :find_line_backward, state_data}
     end
+
+  end
+
+  def find_line_foward_slow(event, %State{target_c: target} = state_data) do
+    Logger.info("Received event '#{event}' when in state '#{:find_line_foward_slow}'")
+    case event do
+      {:color, ^target} ->
+        stop_motors()
+        turn_left()
+        {:next_state, :straighten_up, state_data}
+      _ ->
+        {:next_state, :find_line_foward_slow, state_data}
+    end
+  end
+
+  def straighten_up(event, %State{target_c: target} = state_data) do
+    Logger.info("Received event '#{event}' when in state '#{:straighten_up}'")
+    case event do
+      {:color, color} when color != target ->
+        # We should now be on the left side of the left edge, i.e. outside the line
+        stop_motors()
+        forward_slight_right()
+        {:next_state, :on_left_side, state_data}
+      _ ->
+        {:next_state, :straighten_up, state_data}
+    end
+  end
+
+  def on_left_side(event, %State{target_c: target} = state_data) do
+    Logger.info("Received event '#{event}' when in state '#{:on_left_side}'")
+    case event do
+      {:color, ^target} ->
+        # We should now be on the right side of the left edge, i.e. on the line
+        forward_slight_left
+        {:next_state, :on_right_side, state_data, @lost_timeout}
+      :timeout ->
+        stop_when_lost()
+        {:stop, :normal, state_data}
+      _ ->
+        {:next_state, :on_left_side, state_data, @lost_timeout}
+    end
+  end
+
+  def on_right_side(event, %State{target_c: target} = state_data) do
+    Logger.info("Received event '#{event}' when in state '#{:on_right_side}'")
+    case event do
+      {:color, color} when color != target ->
+        # On the left side again...
+        forward_slight_right()
+        {:next_state, :on_left_side, state_data, @lost_timeout}
+      :timeout ->
+        stop_when_lost()
+        {:stop, :normal, state_data}
+      _ ->
+        {:next_state, :on_right_side, state_data, @lost_timeout}
+    end
+  end
+
+
+  #
+  # Helper functions
+  #
+
+  def stop_motors_and_event_generators() do
+    Logger.info("Stopping everything")
+    stop_motors()
+    BumperEvents.stop(@bumper_name)
+    ColorEvents.stop(@color_name)
+  end
+
+  def stop_when_lost() do
+    Logger.info("Sorry I'm lost")
+    stop_motors_and_event_generators()
+    wag_tail()
   end
 
   #
   # Motor functions
   #
 
-  def forward speed \\ @forward_speed do
-    EV3.Motor.forward @left_motor, speed
-    EV3.Motor.forward @right_motor, speed
+  def forward(speed \\ @forward_speed) do
+    EV3.Motor.forward(@left_motor, speed)
+    EV3.Motor.forward(@right_motor, speed)
   end
 
-  def backward speed do
-    EV3.Motor.backward @left_motor, speed
-    EV3.Motor.backward @right_motor, speed
+  def backward(speed) do
+    EV3.Motor.backward(@left_motor, speed)
+    EV3.Motor.backward(@right_motor, speed)
   end
 
-  def forward_slight_right do
-    EV3.Motor.forward @left_motor, @forward_speed
-    EV3.Motor.forward @right_motor, round @forward_speed * @slight_turn_factor
+  def forward_slight_right() do
+    EV3.Motor.forward(@left_motor, @forward_speed)
+    EV3.Motor.forward(@right_motor, round(@forward_speed * @slight_turn_factor))
   end
 
-  def forward_slight_left do
-    EV3.Motor.forward @left_motor, round @forward_speed * @slight_turn_factor
-    EV3.Motor.forward @right_motor, @forward_speed
+  def forward_slight_left() do
+    EV3.Motor.forward(@left_motor, round(@forward_speed * @slight_turn_factor))
+    EV3.Motor.forward(@right_motor, @forward_speed)
   end
 
-  def stop_motors do
-    EV3.Motor.stop @left_motor
-    EV3.Motor.stop @right_motor
+  def stop_motors() do
+    EV3.Motor.stop(@left_motor)
+    EV3.Motor.stop(@right_motor)
   end
 
-  def turn_left do
-    EV3.Motor.backward @left_motor, @full_turn_speed
-    EV3.Motor.forward @right_motor, @full_turn_speed
+  def turn_left() do
+    EV3.Motor.backward(@left_motor, @full_turn_speed)
+    EV3.Motor.forward(@right_motor, @full_turn_speed)
   end
 
-  def turn_right do
-    EV3.Motor.forward @left_motor, @full_turn_speed
-    EV3.Motor.backward @right_motor, @full_turn_speed
+  def turn_right() do
+    EV3.Motor.forward(@left_motor, @full_turn_speed)
+    EV3.Motor.backward(@right_motor, @full_turn_speed)
   end
 
-  #
-  # Bumper process which stops the motors if it hits anything
-  #
-
-  def bumper_process do
-    :timer.sleep 100
-    case EV3.TouchSensor.value do
-      :released ->
-        bumper_process
-      :pressed ->
-        stop
-    end
-  end
-
-  def wag_tail do
-    EV3.Motor.run @tail_motor, 100
-    spawn fn -> :timer.sleep 5000; EV3.Motor.stop @tail_motor end
+  def wag_tail() do
+    EV3.Motor.run(@tail_motor, 100)
+    spawn fn -> :timer.sleep 5000; EV3.Motor.stop(@tail_motor) end
   end
 
 end
