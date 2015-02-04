@@ -8,7 +8,7 @@ defmodule EE.ColorEvents do
 
   # The default number of times a color needs to be observed before we are
   # certain of the color
-  @threshold 5
+  @threshold 3
 
   defmodule State do
     defstruct controller: nil, history: [], cur_col: nil

@@ -25,6 +25,6 @@ defmodule EV3.Mixfile do
   #
   # Type `mix help deps` for more examples and options
   defp deps do
-    []
+    [{:timex, "~> 0.13.3"}]
   end
 end

@@ -40,7 +40,7 @@ defmodule EE.BumperEvents do
   end
 
   def handle_cast(:stop, state) do
-    Logger.info("Starting bumper events generator")
+    Logger.info("Stopping bumper events generator")
     {:stop, :normal, state}
   end
 
