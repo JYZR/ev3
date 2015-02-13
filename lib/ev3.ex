@@ -6,7 +6,7 @@ defmodule EV3 do
 
   def reload_modules do
     for {name,_} <- :code.all_loaded,
-                    Regex.match?(~r/^Elixir.(EV3|EE)/, to_string(name)) do
+                    Regex.match?(~r/^Elixir.(EV3|EE|EV3BT)/, to_string(name)) do
       :code.purge(name)
       :code.load_file(name)
     end

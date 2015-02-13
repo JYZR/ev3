@@ -25,6 +25,7 @@ defmodule EV3.Mixfile do
   #
   # Type `mix help deps` for more examples and options
   defp deps do
-    [{:timex, "~> 0.13.3"}]
+    [{:timex, "~> 0.13.3"},
+     {:ev3bt,  git: "https://github.com/jyzr/ev3bt", branch: "jyzr"}]
   end
 end

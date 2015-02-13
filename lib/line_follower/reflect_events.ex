@@ -3,8 +3,7 @@ defmodule EE.ReflectEvents do
   alias EE.SmoothFollower
   require Logger
 
-  # Time in ms between each observation
-  @interval 100
+  @port :in2
 
   defmodule State do
     defstruct controller: nil
@@ -18,7 +17,6 @@ defmodule EE.ReflectEvents do
     {:ok, pid} = GenServer.start_link(__MODULE__,
                                       [controller: self()],
                                       options)
-    :timer.send_after(@interval, pid, :check)
     {:ok, pid}
   end
 
@@ -32,7 +30,8 @@ defmodule EE.ReflectEvents do
 
   def init(args) do
     Logger.info("Starting reflect events generator")
-    EV3.ColorSensor.set_mode(:col_reflect)
+    # EV3.ColorSensor.set_mode(:col_reflect)
+    {:ok, _msg_id} = EV3BT.ColorSensor.get_reflect_async(@port)
     {:ok, %State{controller: args[:controller]}}
   end
 
@@ -41,10 +40,10 @@ defmodule EE.ReflectEvents do
     {:stop, :normal, state}
   end
 
-  def handle_info(:check, state) do
-    reflect = EV3.ColorSensor.get_reflect(set_mode: false)
+  def handle_info({:reply, _msg_id, reply}, state) do
+    reflect = EV3BT.ColorSensor.decode_async_reply_reflect(reply)
     SmoothFollower.notify(state.controller, {:reflect, reflect})
-    :timer.send_after(@interval, :check)
+    {:ok, _msg_id} = EV3BT.ColorSensor.get_reflect_async(@port)
     {:noreply, state}
   end
 

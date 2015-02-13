@@ -2,7 +2,7 @@ defmodule EE.SmoothFollower do
   use EV3.Util.GenFSM
 
   alias EV3.Util.GenFSM
-  alias EE.BumperEvents
+  # alias EE.BumperEvents
   alias EE.ReflectEvents
 
   require Logger
@@ -24,7 +24,7 @@ defmodule EE.SmoothFollower do
   @tail_motor :outD
 
   @smooth_name :smooth_p
-  @bumper_name :bumper_p
+  # @bumper_name :bumper_p
   @reflect_name :reflect_p
 
   #
@@ -66,10 +66,10 @@ defmodule EE.SmoothFollower do
   #
 
   def init(_args) do
-    EV3.Motor.reset(:all)
+    EV3BT.Motor.reset([@left_motor, @right_motor])
     Logger.info("Motors have been reset")
-    BumperEvents.start_link(name: @bumper_name)
-    Logger.info("Started bumper events generator")
+    # BumperEvents.start_link(name: @bumper_name)
+    # Logger.info("Started bumper events generator")
     ReflectEvents.start_link(name: @reflect_name)
     Logger.info("Started reflect events generator")
     state_data = nil
@@ -107,8 +107,8 @@ defmodule EE.SmoothFollower do
         # Set right speed to a number in the range -25..55
         right_speed = round(15 - pos_or_neg_reflect / 50 * 40)
         # Stating the obvious: The sum of both speeds will always be 30
-        EV3.Motor.forward(@left_motor, left_speed)
-        EV3.Motor.forward(@right_motor, right_speed)
+        EV3BT.Motor.forward(@left_motor, div(left_speed, 2))
+        EV3BT.Motor.forward(@right_motor, div(right_speed, 2))
         {:next_state, :smooth, state_data}
       _ ->
         Logger.warning("Received unexpected event #{event}")
@@ -123,7 +123,7 @@ defmodule EE.SmoothFollower do
   def stop_motors_and_event_generators() do
     Logger.info("Stopping everything")
     stop_motors()
-    BumperEvents.stop(@bumper_name)
+    # BumperEvents.stop(@bumper_name)
     ReflectEvents.stop(@reflect_name)
   end
 
@@ -145,8 +145,8 @@ defmodule EE.SmoothFollower do
   #
 
   def stop_motors() do
-    EV3.Motor.stop(@left_motor)
-    EV3.Motor.stop(@right_motor)
+    EV3BT.Motor.stop(@left_motor)
+    EV3BT.Motor.stop(@right_motor)
   end
 
 end
